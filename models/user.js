@@ -1,5 +1,7 @@
-var bcryptjs = require('bcryptjs');
+var bcrypt = require('bcryptjs');
 var _ = require('underscore');
+var cryptojs = require('crypto-js');
+var jwt = require ('jsonwebtoken');
 
 module.exports = function(sequelize, DataTypes) {
 	var user = sequelize.define('user', {
@@ -24,8 +26,8 @@ module.exports = function(sequelize, DataTypes) {
 				len: [7, 100]
 			},
 			set: function(value) {
-				var salt = bcryptjs.genSaltSync(10);
-				var hashedPassword = bcryptjs.hashSync(value, salt);
+				var salt = bcrypt.genSaltSync(10);
+				var hashedPassword = bcrypt.hashSync(value, salt);
 
 				this.setDataValue('password', value);
 				this.setDataValue('salt', salt);
@@ -35,6 +37,7 @@ module.exports = function(sequelize, DataTypes) {
 	}, {
 		hooks: {
 			beforeValidate: function(user, options) {
+				//user.email
 				if (typeof user.email === 'string') {
 					user.email = user.email.toLowerCase();
 				}
@@ -52,9 +55,10 @@ module.exports = function(sequelize, DataTypes) {
 							email: body.email
 						}
 					}).then(function(user) {
-						if (!user || !bcryptjs.compareSync(body.password, user.get('password_hash'))) {
+						if (!user || !bcrypt.compareSync(body.password, user.get('password_hash'))) {
 							return reject();
 						}
+
 						resolve(user);
 					}, function(e) {
 						reject();
@@ -66,6 +70,23 @@ module.exports = function(sequelize, DataTypes) {
 			toPublicJSON: function() {
 				var json = this.toJSON();
 				return _.pick(json, 'id', 'email', 'createdAt', 'updatedAt');
+			},
+			generateToken: function (type) {
+				if (!_.isString(type)) {
+					return undefined;
+				}
+
+				try {
+					var stringData = JSON.stringify({id: this.get('id'), type: type});
+					var encryptedData = cryptojs.AES.encrypt(stringData, 'abc123@#!').toString();
+					var token = jwt.sign({
+						token: encryptedData
+					}, 'qwerty098');
+
+					return token;
+				} catch (e) {
+					return undefined;
+				}
 			}
 		}
 	});
